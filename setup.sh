@@ -1,0 +1,42 @@
+#!/bin/bash
+
+sudo mount -t ntfs-3g /dev/sdb1 ~/ntfs/
+sudo mount -t ntfs-3g /dev/sda1 ~/ntfs2/
+
+############################################
+# Modify the key arrangement of the keyboard
+############################################
+
+# # Swap Alt_L and Super_L #
+#remove mod1 = Alt_L
+#remove Super_L = Super_L
+#keysym Super_L = Alt_L
+#keysym Alt_L = Super_L
+#add mod1 = Alt_L
+#add Super_L = Super_L
+
+# Switch the windows and the alt keys
+# This also need to take into account the second alt key on the keyboard to be useful
+# Remove keys from their respective modifiers
+#xmodmap -e "remove mod4 = Super_L"
+#xmodmap -e "remove mod1 = Alt_L"
+# Swap the Keysym-KeyCode mapping
+#xmodmap -e "keycode 133 = Alt_L"
+#xmodmap -e "keycode 64 = Super_L"
+# Add keys back to their respective modifiers
+#xmodmap -e "add mod4 = Super_L"
+#xmodmap -e "add mod1 = Alt_L"
+
+# This code does not reassign the escape key just applies the capslock key to escape
+# Switch the Esc and the CapsLock keys
+# Remove keys from their respective modifiers
+xmodmap -e "remove lock = Caps_Lock"
+# xmodmap -e "remove mod3 = Escape"
+# Swap the Keysym-KeyCode mapping
+xmodmap -e "keycode 66 = Escape"
+# xmodmap -e "keycode 9 = Caps_Lock"
+# Add keys back to their respective modifiers
+# xmodmap -e "add lock = Caps_Lock"
+xmodmap -e "add mod3 = Escape"
+
+sudo apt update -y && sudo apt upgrade -y
