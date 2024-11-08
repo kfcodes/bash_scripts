@@ -6,6 +6,7 @@ FASTAPI_DIR="$HOME/.fastapi"
 FASTAPI_HOST="0.0.0.0"
 FASTAPI_PORT=8000
 REACT_DIR="$HOME/.reactapp"
+ANSIBLE_DIR="$HOME/.my_ansible"
 
 # Check if the session already exists
 tmux has-session -t $SESSION 2>/dev/null
@@ -29,10 +30,17 @@ if [ $? != 0 ]; then
     tmux new-window -t $SESSION -n 'fastapi'
     tmux send-keys -t $SESSION:1 "cd $FASTAPI_DIR/app/" C-m
     tmux send-keys -t $SESSION:1 'source ../.venv/bin/activate' C-m
+    tmux send-keys -t $SESSION:1 'git checkout dev' C-m
 
     # React app frontend
     tmux new-window -t $SESSION -n 'react'
     tmux send-keys -t $SESSION:2 "cd $REACT_DIR/src" C-m
+    tmux send-keys -t $SESSION:2 'git checkout dev' C-m
+
+    # React app frontend
+    tmux new-window -t $SESSION -n 'app sync playbook'
+    tmux send-keys -t $SESSION:2 "cd $ANSIBLE_DIR" C-m
+    tmux send-keys -t $SESSION:2 'ansible-playbook -K playbooks/app_sync.yml' C-m
 
     # Go back to React window
     tmux select-window -t $SESSION:0
