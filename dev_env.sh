@@ -39,11 +39,11 @@ if [ $? != 0 ]; then
 
     # React app frontend
     tmux new-window -t $SESSION -n 'app sync playbook'
-    tmux send-keys -t $SESSION:2 "cd $ANSIBLE_DIR" C-m
-    tmux send-keys -t $SESSION:2 'ansible-playbook -K playbooks/app_sync.yml' C-m
+    tmux send-keys -t $SESSION:3 "cd $ANSIBLE_DIR" C-m
+    tmux send-keys -t $SESSION:3 'ansible-playbook -K playbooks/app_sync.yml' C-m
 
     # Go back to React window
-    tmux select-window -t $SESSION:0
+    tmux select-window -t $SESSION:3
 
 fi
 
