@@ -30,8 +30,19 @@ if [ $? != 0 ]; then
     tmux send-keys -t $SESSION:2.3 "cd $HOME/.my_ansible/" C-m
     tmux send-keys -t $SESSION:2.3 'git status' C-m
 
-: '
     # New window for dev repos
+    # Nvim repo
+    tmux new-window -t $SESSION -n 'Dev Repos'
+    tmux send-keys -t $SESSION:3 "cd $HOME/.fastapi/" C-m
+    tmux send-keys -t $SESSION:3 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3 'git status' C-m
+    # Docker Scripts
+    tmux split-window -h -t $SESSION:3
+    tmux send-keys -t $SESSION:3.2 "cd $HOME/.reactapp/" C-m
+    tmux send-keys -t $SESSION:3 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3.2 'git status' C-m
+
+: '
     # Dmenu Repo
     tmux new-window -t $SESSION -n 'Dev Repos'
     tmux send-keys -t $SESSION:3 "cd $HOME/.suckless/dmenu/" C-m
