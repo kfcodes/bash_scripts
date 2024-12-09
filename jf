@@ -27,25 +27,30 @@ if [ $? != 0 ]; then
     tmux select-pane -t 1
 
     # FastAPI backend
-    tmux new-window -t $SESSION -n 'fastapi'
-    tmux send-keys -t $SESSION:2 "cd $FASTAPI_DIR/app/" C-m
-    tmux send-keys -t $SESSION:2 'source ../.venv/bin/activate' C-m
-    tmux send-keys -t $SESSION:2 'git checkout dev' C-m
+    tmux new-window -t $SESSION -n 'app data'
+    tmux send-keys -t $SESSION:2 "cd $HOME/.application/" C-m
     tmux send-keys -t $SESSION:2 'git status' C-m
 
-    # React app frontend
-    tmux new-window -t $SESSION -n 'react'
-    tmux send-keys -t $SESSION:3 "cd $REACT_DIR/src" C-m
+    # FastAPI backend
+    tmux new-window -t $SESSION -n 'fastapi'
+    tmux send-keys -t $SESSION:3 "cd $FASTAPI_DIR/app/" C-m
+    tmux send-keys -t $SESSION:3 'source ../.venv/bin/activate' C-m
     tmux send-keys -t $SESSION:3 'git checkout dev' C-m
     tmux send-keys -t $SESSION:3 'git status' C-m
 
+    # React app frontend
+    tmux new-window -t $SESSION -n 'react'
+    tmux send-keys -t $SESSION:4 "cd $REACT_DIR/src" C-m
+    tmux send-keys -t $SESSION:4 'git checkout dev' C-m
+    tmux send-keys -t $SESSION:4 'git status' C-m
+
     # Run ansible app maintainance script
     tmux new-window -t $SESSION -n 'ansible playbook'
-    tmux send-keys -t $SESSION:4 "cd $ANSIBLE_DIR" C-m
-    tmux send-keys -t $SESSION:4 'ansible-playbook -K playbooks/app_sync.yml' C-m
+    tmux send-keys -t $SESSION:5 "cd $ANSIBLE_DIR" C-m
+    tmux send-keys -t $SESSION:5 'ansible-playbook -K playbooks/app_sync.yml' C-m
 
     # Go back to React window
-    tmux select-window -t $SESSION:4
+    tmux select-window -t $SESSION:5
 
 fi
 
