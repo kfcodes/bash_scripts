@@ -1,44 +1,52 @@
 #!/bin/bash
 
 # Session Name
-SESSION="git"
+SESSION="localRepoStatus"
 
 # Check if the session already exists
 tmux has-session -t $SESSION 2>/dev/null
 if [ $? != 0 ]; then
-    # Start a new session with the specified name
-    tmux new-session -d -s $SESSION -n 'Nvim'
-
-    # Navigate to the FastAPI directory and start the FastAPI application
-    tmux send-keys -t $SESSION:1 "cd $HOME/.nvim/" C-m
+    # Start a new session For linux repositories
+    # dotfiles repo
+    tmux new-session -d -s $SESSION -n 'Linux'
+    tmux send-keys -t $SESSION:1 "cd $HOME/.dotfiles/" C-m
     tmux send-keys -t $SESSION:1 'git status' C-m
+    # bin scripts repo
+    tmux split-window -h -t $SESSION:1
+    tmux send-keys -t $SESSION:1.2 "cd $HOME/.local/bin/" C-m
+    tmux send-keys -t $SESSION:1.2 'git status' C-m
 
-    # FastAPI backend
-    tmux new-window -t $SESSION -n 'Dotfiles'
-    tmux send-keys -t $SESSION:2 "cd $HOME/.dotfiles/" C-m
+    # Dev folders Window
+    # Nvim repo
+    tmux new-window -t $SESSION -n 'Dev Config'
+    tmux send-keys -t $SESSION:2 "cd $HOME/.nvim/" C-m
     tmux send-keys -t $SESSION:2 'git status' C-m
+    # Docker Scripts
+    tmux split-window -h -t $SESSION:2
+    tmux send-keys -t $SESSION:2.2 "cd $HOME/.docker_scripts/" C-m
+    tmux send-keys -t $SESSION:2.2 'git status' C-m
+    # Ansible playbook
+    tmux split-window -h -t $SESSION:2
+    tmux send-keys -t $SESSION:2.3 "cd $HOME/.my_ansible/" C-m
+    tmux send-keys -t $SESSION:2.3 'git status' C-m
 
-    # React app frontend
-    tmux new-window -t $SESSION -n 'Bash scripts'
-    tmux send-keys -t $SESSION:3 "cd $HOME/.local/bin/" C-m
+: '
+    # New window for dev repos
+    # Dmenu Repo
+    tmux new-window -t $SESSION -n 'Dev Repos'
+    tmux send-keys -t $SESSION:3 "cd $HOME/.suckless/dmenu/" C-m
     tmux send-keys -t $SESSION:3 'git status' C-m
+    # DWM Repo
+    tmux split-window -h -t $SESSION:3
+    tmux send-keys -t $SESSION:3.2 "cd $HOME/.suckless/dwm/" C-m
+    tmux send-keys -t $SESSION:2.2 'git status' C-m
+    # ST Repo
+    tmux split-window -h -t $SESSION:3
+    tmux send-keys -t $SESSION:3.3 "cd $HOME/.suckless/st/" C-m
+    tmux send-keys -t $SESSION:2.3 'git status' C-m
+'
 
-    # Run ansible app maintainance script
-    tmux new-window -t $SESSION -n 'Docker Scripts'
-    tmux send-keys -t $SESSION:4 "cd $HOME/.docker_scripts" C-m
-    tmux send-keys -t $SESSION:4 'git status' C-m
-
-    # Run ansible app maintainance script
-    tmux new-window -t $SESSION -n 'Dmenu'
-    tmux send-keys -t $SESSION:5 "cd $HOME/.suckless/dmenu/" C-m
-    tmux send-keys -t $SESSION:5 'git status' C-m
-
-    # Run ansible app maintainance script
-    tmux new-window -t $SESSION -n 'DWM'
-    tmux send-keys -t $SESSION:4 "cd $HOME/.suckless/dwm/" C-m
-    tmux send-keys -t $SESSION:4 'git status' C-m
-
-    # Go back to React window
+    # Go back to Linux window
     tmux select-window -t $SESSION:1
 fi
 # Attach to the session
