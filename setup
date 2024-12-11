@@ -1,8 +1,5 @@
 #!/bin/bash
 
-sudo mount -t ntfs-3g /dev/sdb1 ~/ntfs/
-sudo mount -t ntfs-3g /dev/sda1 ~/ntfs2/
-
 ############################################
 # Modify the key arrangement of the keyboard
 ############################################
