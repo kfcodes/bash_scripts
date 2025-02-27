@@ -1,0 +1,7 @@
+#! /bin/bash
+
+# pdflatex current.tex && pdflatex current.tex && zathura current.pdf
+
+pdflatex ~/thesis/current.tex 
+pdflatex ~/thesis/current.tex 
+texcount -inc -sum ~/thesis/current.tex
