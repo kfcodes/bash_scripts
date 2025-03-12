@@ -3,5 +3,3 @@
 cd ~/thesis/
 pdflatex ~/thesis/current.tex
 pdflatex ~/thesis/current.tex
-texcount -inc -sum ~/thesis/current.tex
-zathura current.pdf &
