@@ -1,0 +1,4 @@
+#! /bin/bash
+ansible-playbook playbooks/configure_systems.yml --syntax-check
+ansible-lint playbooks/configure_systems.yml
+ansible-playbook playbooks/configure_systems.yml --check
