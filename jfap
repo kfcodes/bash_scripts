@@ -1,71 +1,74 @@
-#!/usr/bin/env bash
+#!/bin/bash
+set -euo pipefail
 
-# -----------------------------------------------------------------------------
-# tmux startup script for “dev” session: 2 React windows, 3 FastAPI windows
-# -----------------------------------------------------------------------------
+# ───── Paths ─────
+BASE_DIR="$HOME/.production_apps"
 
+# ───── Session & Windows ─────
 SESSION="dev"
-PROD_DIR="$HOME/.production_apps"
 
-# ─── Default window to select on attach ──────────────────────────────────────
-# Set this to one of: "Nutritionals Frontend", "Pallet App", "Pallet API", "Label", "Nutritionals API"
-DEFAULT_WINDOW="Pallet API"
+# Window Names
+WIN_MAIN="Running_Apps"
 
-# ─── React windows ────────────────────────────────────────────────────────────
-REACT1_NAME="Nutritionals Frontend"
-REACT1_DIR="$PROD_DIR/nutritionals_front_end"
+# ───── API Windows & Paths ─────
+WIN_API_ENTRIES=(
+  "PALLET_API=$BASE_DIR/palletapi"
+  "LABEL_API=$BASE_DIR/labelapi"
+  # "PACKING_LIST_API=$BASE_DIR/packing_list_api"
+  "NUTRITIONALS_API=$BASE_DIR/nutritionals_api"
+)
 
-REACT2_NAME="Pallet App"
-REACT2_DIR="$PROD_DIR/pallet_app"
+# ───── Frontend Windows & Paths ─────
+WIN_FRONT_ENTRIES=(
+  "PALLET_APP=$BASE_DIR/reactapp"
+  "NUTRITIONALS_APP=$BASE_DIR/nutritionals_front_end"
+)
 
-# ─── FastAPI windows ─────────────────────────────────────────────────────────
-FASTAPI1_NAME="Pallet API"
-FASTAPI1_DIR="$PROD_DIR/palletapi/app"
-FASTAPI1_PORT=8000
+# ───── Commands ─────
+FASTAPI_VENV="source ../.venv/bin/activate"
+FASTAPI_RUN="uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+REACT_RUN="npm start"
+GIT_STATUS="git checkout dev git status"
 
-FASTAPI2_NAME="Label"
-FASTAPI2_DIR="$PROD_DIR/label_api/app"
-FASTAPI2_PORT=8001
-
-FASTAPI3_NAME="Nutritionals API"
-FASTAPI3_DIR="$PROD_DIR/nutritionals_api/app"
-FASTAPI3_PORT=8002
-
-# -----------------------------------------------------------------------------
-# ensure tmux server is running; only create session/windows on first run
-# -----------------------------------------------------------------------------
-tmux start-server
+# ───── Create Session ─────
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmux new-session -d -s "$SESSION" -n "$WIN_MAIN"
 
-  # Window 1: Nutritionals Frontend
-  tmux new-session -d -s "$SESSION" -n "$REACT1_NAME"
-  tmux send-keys -t "$SESSION:$REACT1_NAME" \
-    "cd $REACT1_DIR && npm install && npm start" C-m
+    # ───── Main Window Panes ─────
 
-  # Window 2: Pallet App
-  tmux new-window -t "$SESSION" -n "$REACT2_NAME"
-  tmux send-keys -t "$SESSION:$REACT2_NAME" \
-    "cd $REACT2_DIR && npm install && npm start" C-m
+    # Split horizontally
+    tmux split-window -h -t "$SESSION:$WIN_MAIN"
 
-  # Window 3: Pallet API
-  tmux new-window -t "$SESSION" -n "$FASTAPI1_NAME"
-  tmux send-keys -t "$SESSION:$FASTAPI1_NAME" \
-    "cd $FASTAPI1_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI1_PORT --reload" C-m
+    # Pane 0: FastAPI
+    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "cd \"$BASE_DIR/nutritionals_api/app\"" C-m
+    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "$FASTAPI_VENV" C-m
+    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "$FASTAPI_RUN" C-m
 
-  # Window 4: Label
-  tmux new-window -t "$SESSION" -n "$FASTAPI2_NAME"
-  tmux send-keys -t "$SESSION:$FASTAPI2_NAME" \
-    "cd $FASTAPI2_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI2_PORT --reload" C-m
+    # Pane 2: React
+    tmux send-keys -t "$SESSION:$WIN_MAIN.2" "cd \"$BASE_DIR/nutritionals_front_end\"" C-m
+    tmux send-keys -t "$SESSION:$WIN_MAIN.2" "$REACT_RUN" C-m
 
-  # Window 5: Nutritionals API
-  tmux new-window -t "$SESSION" -n "$FASTAPI3_NAME"
-  tmux send-keys -t "$SESSION:$FASTAPI3_NAME" \
-    "cd $FASTAPI3_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI3_PORT --reload" C-m
+    # ───── API Windows ─────
+    for entry in "${WIN_API_ENTRIES[@]}"; do
+        IFS='=' read -r WIN_API APP_PATH <<< "$entry"
+        tmux new-window -t "$SESSION" -n "$WIN_API"
+        tmux send-keys -t "$SESSION:$WIN_API" "cd \"$APP_PATH/app\"" C-m
+        tmux send-keys -t "$SESSION:$WIN_API" "$FASTAPI_VENV" C-m
+        tmux send-keys -t "$SESSION:$WIN_API" "$GIT_STATUS" C-m
+    done
 
+    # ───── Frontend Windows ─────
+    for entry in "${WIN_FRONT_ENTRIES[@]}"; do
+        IFS='=' read -r WIN_FRONT FRONT_PATH <<< "$entry"
+        tmux new-window -t "$SESSION" -n "$WIN_FRONT"
+        tmux send-keys -t "$SESSION:$WIN_FRONT" "cd \"$FRONT_PATH/src\"" C-m
+        tmux send-keys -t "$SESSION:$WIN_FRONT" "$GIT_STATUS" C-m
+    done
+
+    # Focus on the last created API window
+    IFS='=' read -r LAST_API _ <<< "${WIN_API_ENTRIES[-1]}"
+    tmux select-window -t "$SESSION:$LAST_API"
 fi
 
-# -----------------------------------------------------------------------------
-# select your preferred window and attach
-# -----------------------------------------------------------------------------
-tmux select-window -t "$SESSION:$DEFAULT_WINDOW"
-tmux attach-session -t "$SESSION"
+# ───── Attach ─────
+tmux attach -t "$SESSION"
