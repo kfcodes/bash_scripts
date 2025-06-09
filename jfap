@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+# -----------------------------------------------------------------------------
+# tmux startup script for “dev” session: 2 React windows, 3 FastAPI windows
+# -----------------------------------------------------------------------------
+
+SESSION="dev"
+PROD_DIR="$HOME/.production_apps"
+
+# ─── Default window to select on attach ──────────────────────────────────────
+# Set this to one of: "Nutritionals Frontend", "Pallet App", "Pallet API", "Label", "Nutritionals API"
+DEFAULT_WINDOW="Pallet API"
+
+# ─── React windows ────────────────────────────────────────────────────────────
+REACT1_NAME="Nutritionals Frontend"
+REACT1_DIR="$PROD_DIR/nutritionals_front_end"
+
+REACT2_NAME="Pallet App"
+REACT2_DIR="$PROD_DIR/pallet_app"
+
+# ─── FastAPI windows ─────────────────────────────────────────────────────────
+FASTAPI1_NAME="Pallet API"
+FASTAPI1_DIR="$PROD_DIR/palletapi/app"
+FASTAPI1_PORT=8000
+
+FASTAPI2_NAME="Label"
+FASTAPI2_DIR="$PROD_DIR/label_api/app"
+FASTAPI2_PORT=8001
+
+FASTAPI3_NAME="Nutritionals API"
+FASTAPI3_DIR="$PROD_DIR/nutritionals_api/app"
+FASTAPI3_PORT=8002
+
+# -----------------------------------------------------------------------------
+# ensure tmux server is running; only create session/windows on first run
+# -----------------------------------------------------------------------------
+tmux start-server
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+
+  # Window 1: Nutritionals Frontend
+  tmux new-session -d -s "$SESSION" -n "$REACT1_NAME"
+  tmux send-keys -t "$SESSION:$REACT1_NAME" \
+    "cd $REACT1_DIR && npm install && npm start" C-m
+
+  # Window 2: Pallet App
+  tmux new-window -t "$SESSION" -n "$REACT2_NAME"
+  tmux send-keys -t "$SESSION:$REACT2_NAME" \
+    "cd $REACT2_DIR && npm install && npm start" C-m
+
+  # Window 3: Pallet API
+  tmux new-window -t "$SESSION" -n "$FASTAPI1_NAME"
+  tmux send-keys -t "$SESSION:$FASTAPI1_NAME" \
+    "cd $FASTAPI1_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI1_PORT --reload" C-m
+
+  # Window 4: Label
+  tmux new-window -t "$SESSION" -n "$FASTAPI2_NAME"
+  tmux send-keys -t "$SESSION:$FASTAPI2_NAME" \
+    "cd $FASTAPI2_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI2_PORT --reload" C-m
+
+  # Window 5: Nutritionals API
+  tmux new-window -t "$SESSION" -n "$FASTAPI3_NAME"
+  tmux send-keys -t "$SESSION:$FASTAPI3_NAME" \
+    "cd $FASTAPI3_DIR && source ../.venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port $FASTAPI3_PORT --reload" C-m
+
+fi
+
+# -----------------------------------------------------------------------------
+# select your preferred window and attach
+# -----------------------------------------------------------------------------
+tmux select-window -t "$SESSION:$DEFAULT_WINDOW"
+tmux attach-session -t "$SESSION"
