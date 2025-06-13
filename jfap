@@ -5,69 +5,83 @@ set -euo pipefail
 BASE_DIR="$HOME/.production_apps"
 
 # ───── Session & Windows ─────
-SESSION="dev"
+SESSION="development"
 
 # Window Names
-WIN_MAIN="Running_Apps"
+MAIN="Running_Apps"
 
 # ───── API Windows & Paths ─────
-WIN_API_ENTRIES=(
-  "PALLET_API=$BASE_DIR/palletapi"
-  "LABEL_API=$BASE_DIR/labelapi"
+API_ENTRIES=(
+  "PALLET_API=$BASE_DIR/apipallet"
+  "LABEL_API=$BASE_DIR/apilabel"
+  "NUTRITIONALS_API=$BASE_DIR/apinutritionals"
   # "PACKING_LIST_API=$BASE_DIR/packing_list_api"
-  "NUTRITIONALS_API=$BASE_DIR/nutritionals_api"
 )
 
 # ───── Frontend Windows & Paths ─────
-WIN_FRONT_ENTRIES=(
-  "PALLET_APP=$BASE_DIR/reactapp"
-  "NUTRITIONALS_APP=$BASE_DIR/nutritionals_front_end"
+FRONT_ENTRIES=(
+  "PALLET_APP=$BASE_DIR/apppallet"
+  "NUTRITIONALS_APP=$BASE_DIR/appnutritionals"
 )
 
 # ───── Commands ─────
 FASTAPI_VENV="source ../.venv/bin/activate"
-FASTAPI_RUN="uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-REACT_RUN="npm start"
-GIT_STATUS="git checkout dev git status"
+GIT_DEV="git checkout dev ; git status"
+GIT_MAIN="git checkout main && git status"
 
 # ───── Create Session ─────
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-    tmux new-session -d -s "$SESSION" -n "$WIN_MAIN"
+    tmux new-session -d -s "$SESSION" -n "$MAIN"
 
     # ───── Main Window Panes ─────
-
     # Split horizontally
-    tmux split-window -h -t "$SESSION:$WIN_MAIN"
+    tmux split-window -h -t "$SESSION:$MAIN"
 
-    # Pane 0: FastAPI
-    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "cd \"$BASE_DIR/nutritionals_api/app\"" C-m
-    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "$FASTAPI_VENV" C-m
-    tmux send-keys -t "$SESSION:$WIN_MAIN.1" "$FASTAPI_RUN" C-m
+        # Setting the API splits on the lefthand pane
+        # ───── LEFT PANE (pane 1) ─────
+        tmux select-pane -t "$SESSION:$MAIN.1"
+        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/apipallet\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "$GIT_DEV" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "docker container stop palletapi && docker container rm palletapi ; docker compose up --build --detach && docker network connect application_network palletapi" C-m
+        tmux split-window -v -t "$SESSION:$MAIN.1"
+        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/apilabel\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "$GIT_DEV" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "docker container stop labelapi && docker container rm labelapi ; docker compose up --build --detach && docker network connect application_network labelapi" C-m
+        tmux split-window -v -t "$SESSION:$MAIN.2"
+        tmux send-keys -t "$SESSION:$MAIN.3" "cd \"$BASE_DIR/apinutritionals\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.3" "docker container stop nutritionalsapi && docker container rm nutritionalsapi ; docker compose up --build --detach && docker network connect application_network nutritionalsapi" C-m
 
-    # Pane 2: React
-    tmux send-keys -t "$SESSION:$WIN_MAIN.2" "cd \"$BASE_DIR/nutritionals_front_end\"" C-m
-    tmux send-keys -t "$SESSION:$WIN_MAIN.2" "$REACT_RUN" C-m
+        # ───── RIGHT PANE (pane 2) ─────
+        # Setting the reactapp splits on the righthand pane
+        tmux select-pane -t "$SESSION:$MAIN.4"
+        tmux send-keys -t "$SESSION:$MAIN.4" "cd \"$BASE_DIR/apppallet\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.4" "$GIT_DEV" C-m
+        tmux send-keys -t "$SESSION:$MAIN.4" "docker container stop palletapp && docker container rm palletapp ; docker compose up --build --detach && docker network connect application_network palletapp" C-m
+        tmux split-window -v -t "$SESSION:$MAIN.4"
+        tmux send-keys -t "$SESSION:$MAIN.5" "cd \"$BASE_DIR/appnutritionals\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.5" "docker container stop nutritionalsapp && docker container rm nutritionalsapp ; docker compose up --build --detach && docker network connect application_network nutritionalsapp" C-m
 
     # ───── API Windows ─────
-    for entry in "${WIN_API_ENTRIES[@]}"; do
-        IFS='=' read -r WIN_API APP_PATH <<< "$entry"
-        tmux new-window -t "$SESSION" -n "$WIN_API"
-        tmux send-keys -t "$SESSION:$WIN_API" "cd \"$APP_PATH/app\"" C-m
-        tmux send-keys -t "$SESSION:$WIN_API" "$FASTAPI_VENV" C-m
-        tmux send-keys -t "$SESSION:$WIN_API" "$GIT_STATUS" C-m
+    for entry in "${API_ENTRIES[@]}"; do
+        IFS='=' read -r API APP_PATH <<< "$entry"
+        tmux new-window -t "$SESSION" -n "$API"
+        tmux send-keys -t "$SESSION:$API" "cd \"$APP_PATH/app\"" C-m
+        tmux send-keys -t "$SESSION:$API" "$FASTAPI_VENV" C-m
+        tmux send-keys -t "$SESSION:$API" "$GIT_DEV" C-m
     done
 
     # ───── Frontend Windows ─────
-    for entry in "${WIN_FRONT_ENTRIES[@]}"; do
-        IFS='=' read -r WIN_FRONT FRONT_PATH <<< "$entry"
-        tmux new-window -t "$SESSION" -n "$WIN_FRONT"
-        tmux send-keys -t "$SESSION:$WIN_FRONT" "cd \"$FRONT_PATH/src\"" C-m
-        tmux send-keys -t "$SESSION:$WIN_FRONT" "$GIT_STATUS" C-m
+    for entry in "${FRONT_ENTRIES[@]}"; do
+        IFS='=' read -r FRONT FRONT_PATH <<< "$entry"
+        tmux new-window -t "$SESSION" -n "$FRONT"
+        tmux send-keys -t "$SESSION:$FRONT" "cd \"$FRONT_PATH/src\"" C-m
+        tmux send-keys -t "$SESSION:$FRONT" "$GIT_DEV" C-m
     done
 
     # Focus on the last created API window
-    IFS='=' read -r LAST_API _ <<< "${WIN_API_ENTRIES[-1]}"
-    tmux select-window -t "$SESSION:$LAST_API"
+    # IFS='=' read -r LAST_API _ <<< "${API_ENTRIES[-1]}"
+    # tmux select-window -t "$SESSION:$LAST_API"
+
 fi
 
 # ───── Attach ─────
