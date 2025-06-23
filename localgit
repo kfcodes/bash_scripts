@@ -17,7 +17,6 @@ if [ $? != 0 ]; then
     tmux send-keys -t $SESSION:1.2 'git status' C-m
 
     # Dev folders Window
-    # Nvim repo
     tmux new-window -t $SESSION -n 'Dev Config'
     tmux send-keys -t $SESSION:2 "cd $HOME/.nvim/" C-m
     tmux send-keys -t $SESSION:2 'git status' C-m
@@ -30,19 +29,30 @@ if [ $? != 0 ]; then
     tmux send-keys -t $SESSION:2.3 "cd $HOME/.my_ansible/" C-m
     tmux send-keys -t $SESSION:2.3 'git status' C-m
 
-    # New window for dev repos
-    # Nvim repo
-    tmux new-window -t $SESSION -n 'Dev Repos'
-    tmux send-keys -t $SESSION:3 "cd $HOME/.fastapi/" C-m
+    # New window for dev API repos
+    tmux new-window -t $SESSION -n 'APIs'
+    tmux send-keys -t $SESSION:3 "cd $HOME/.production_apps/apipallet/" C-m
     tmux send-keys -t $SESSION:3 "git checkout dev" C-m
     tmux send-keys -t $SESSION:3 'git status' C-m
-    # Docker Scripts
     tmux split-window -h -t $SESSION:3
-    tmux send-keys -t $SESSION:3.2 "cd $HOME/.reactapp/" C-m
-    tmux send-keys -t $SESSION:3 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3.2 "cd $HOME/.production_apps/apilabel/" C-m
+    tmux send-keys -t $SESSION:3.2 "git checkout dev" C-m
     tmux send-keys -t $SESSION:3.2 'git status' C-m
+    tmux split-window -h -t $SESSION:3
+    tmux send-keys -t $SESSION:3.3 "cd $HOME/.production_apps/apinutritionals/" C-m
+    tmux send-keys -t $SESSION:3.3 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3.3 'git status' C-m
 
-: '
+    # New window for dev react repos
+    tmux new-window -t $SESSION -n 'ReactApps'
+    tmux send-keys -t $SESSION:3 "cd $HOME/.production_apps/apppallet/" C-m
+    tmux send-keys -t $SESSION:3 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3 'git status' C-m
+    tmux split-window -h -t $SESSION:3
+    tmux send-keys -t $SESSION:3.2 "cd $HOME/.production_apps/appnutritionals/" C-m
+    tmux send-keys -t $SESSION:3.2 "git checkout dev" C-m
+    tmux send-keys -t $SESSION:3.2 'git status' C-m
+'
     # Dmenu Repo
     tmux new-window -t $SESSION -n 'Dev Repos'
     tmux send-keys -t $SESSION:3 "cd $HOME/.suckless/dmenu/" C-m
