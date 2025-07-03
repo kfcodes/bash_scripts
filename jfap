@@ -12,21 +12,21 @@ MAIN="Running_Apps"
 
 # ───── API Windows & Paths ─────
 API_ENTRIES=(
-  "PALLET_API=$BASE_DIR/apipallet"
-  "LABEL_API=$BASE_DIR/apilabel"
-  "NUTRITIONALS_API=$BASE_DIR/apinutritionals"
+  "PALLET_API=$BASE_DIR/apis/pallet_api"
+  "LABEL_API=$BASE_DIR/apis/label_api"
+  "NUTRITIONALS_API=$BASE_DIR/apis/nutritionals_api"
   # "PACKING_LIST_API=$BASE_DIR/packing_list_api"
 )
 
 # ───── Frontend Windows & Paths ─────
 FRONT_ENTRIES=(
-  "PALLET_APP=$BASE_DIR/apppallet"
+  "PALLET_APP=$BASE_DIR/frontend"
   "NUTRITIONALS_APP=$BASE_DIR/appnutritionals"
 )
 
 # ───── Commands ─────
 FASTAPI_VENV="source ../.venv/bin/activate"
-GIT_DEV="git checkout dev ; git status"
+GIT_DEV="git checkout dev; git status"
 GIT_MAIN="git checkout main && git status"
 
 # ───── Create Session ─────
@@ -37,29 +37,27 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     # Split horizontally
     tmux split-window -h -t "$SESSION:$MAIN"
 
-        # Setting the API splits on the lefthand pane
-        # ───── LEFT PANE (pane 1) ─────
+        # ───── LEFT PANE (API's) ─────
         tmux select-pane -t "$SESSION:$MAIN.1"
-        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/apipallet\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/apis/pallet_api\"" C-m
         tmux send-keys -t "$SESSION:$MAIN.1" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.1" "docker container stop palletapi && docker container rm palletapi ; docker compose up --build --detach && docker network connect application_network palletapi; docker logs -f palletapi" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "docker container stop pallet_api; docker container rm pallet_api; docker compose up --build --detach; docker network connect application_network pallet_api; docker logs -f pallet_api" C-m
         tmux split-window -v -t "$SESSION:$MAIN.1"
-        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/apilabel\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/apis/label_api\"" C-m
         tmux send-keys -t "$SESSION:$MAIN.2" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.2" "docker container stop labelapi && docker container rm labelapi ; docker compose up --build --detach && docker network connect application_network labelapi; docker logs -f labelapi" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "docker container stop label_api; docker container rm label_api; docker compose up --build --detach; docker network connect application_network label_api; docker logs -f label_api" C-m
         tmux split-window -v -t "$SESSION:$MAIN.2"
-        tmux send-keys -t "$SESSION:$MAIN.3" "cd \"$BASE_DIR/apinutritionals\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.3" "docker container stop nutritionalsapi && docker container rm nutritionalsapi ; docker compose up --build --detach && docker network connect application_network nutritionalsapi; docker logs -f nutritionalsapi" C-m
+        tmux send-keys -t "$SESSION:$MAIN.3" "cd \"$BASE_DIR/apis/nutritionals_api\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.3" "docker container stop nutritionals_api; docker container rm nutritionals_api; docker compose up --build --detach; docker network connect application_network nutritionals_api; docker logs -f nutritionals_api" C-m
 
-        # ───── RIGHT PANE (pane 2) ─────
-        # Setting the reactapp splits on the righthand pane
+        # ───── RIGHT PANE (Frontend) ─────
         tmux select-pane -t "$SESSION:$MAIN.4"
-        tmux send-keys -t "$SESSION:$MAIN.4" "cd \"$BASE_DIR/apppallet\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.4" "cd \"$BASE_DIR/frontend\"" C-m
         tmux send-keys -t "$SESSION:$MAIN.4" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.4" "docker container stop palletapp && docker container rm palletapp ; docker compose up --build --detach && docker network connect application_network palletapp; docker logs -f palletapp" C-m
+        tmux send-keys -t "$SESSION:$MAIN.4" "docker container stop pallet_app; docker container rm pallet_app; docker compose up --build --detach; docker network connect _application_network pallet_app; docker logs -f pallet_app" C-m
         tmux split-window -v -t "$SESSION:$MAIN.4"
         tmux send-keys -t "$SESSION:$MAIN.5" "cd \"$BASE_DIR/appnutritionals\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.5" "docker container stop nutritionalsapp && docker container rm nutritionalsapp ; docker compose up --build --detach && docker network connect application_network nutritionalsapp; docker logs -f nutritionalsapp" C-m
+        tmux send-keys -t "$SESSION:$MAIN.5" "docker container stop nutritionals_app; docker container rm nutritionals_app; docker compose up --build --detach; docker network connect _application_network nutritionals_app; docker logs -f nutritionals_app" C-m
 
     # ───── API Windows ─────
     for entry in "${API_ENTRIES[@]}"; do
