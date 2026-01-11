@@ -1,5 +1,0 @@
-#! /bin/bash
-
-cd ~/thesis/
-pdflatex ~/thesis/current.tex
-pdflatex ~/thesis/current.tex

@@ -1,7 +1,0 @@
-#! /bin/bash
-
-cd ~/thesis/
-pdflatex ~/thesis/main.tex
-pdflatex ~/thesis/main.tex
-texcount -inc -sum ~/thesis/main.tex
-zathura main.pdf &
