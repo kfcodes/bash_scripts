@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -e
+
+echo "[docker-prune] Starting FULL Docker cleanup at $(date)"
+
+# Stop all running containers (if any)
+RUNNING_CONTAINERS=$(docker ps -q)
+
+if [ -n "$RUNNING_CONTAINERS" ]; then
+  echo "[docker-prune] Stopping running containers..."
+  docker stop $RUNNING_CONTAINERS
+else
+  echo "[docker-prune] No running containers to stop."
+fi
+
+# Remove all containers (stopped + previously running)
+ALL_CONTAINERS=$(docker ps -aq)
+
+if [ -n "$ALL_CONTAINERS" ]; then
+  echo "[docker-prune] Removing all containers..."
+  docker rm $ALL_CONTAINERS
+else
+  echo "[docker-prune] No containers to remove."
+fi
+
+# Remove everything else
+echo "[docker-prune] Pruning images..."
+docker image prune -a -f
+
+echo "[docker-prune] Pruning networks..."
+docker network prune -f
+
+echo "[docker-prune] Pruning volumes..."
+docker volume prune -f
+
+echo "[docker-prune] Pruning build cache..."
+docker builder prune -f
+
+echo "[docker-prune] Cleanup finished at $(date)"
+

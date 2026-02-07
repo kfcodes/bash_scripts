@@ -2,78 +2,52 @@
 set -euo pipefail
 
 # ───── Paths ─────
-BASE_DIR="$HOME/.production_apps"
+BASE_DIR="$HOME/production_apps"
 
 # ───── Session & Windows ─────
-SESSION="development"
+SESSION="dev_env"
 
 # Window Names
-MAIN="Running_Apps"
+MAIN="WIP"
 
 # ───── API Windows & Paths ─────
-API_ENTRIES=(
-  "PALLET_API=$BASE_DIR/apis/pallet_api"
-  "LABEL_API=$BASE_DIR/apis/label_api"
-  "NUTRITIONALS_API=$BASE_DIR/apis/nutritionals_api"
-  # "PACKING_LIST_API=$BASE_DIR/packing_list_api"
-)
-
-# ───── Frontend Windows & Paths ─────
-FRONT_ENTRIES=(
-  "PALLET_APP=$BASE_DIR/frontend"
-  "NUTRITIONALS_APP=$BASE_DIR/appnutritionals"
+SERVICES=(
+  "FRONTEND_SERVICE=$BASE_DIR/frontend_service"
+  "PRODUCT_INFO_SERVICE=$BASE_DIR/product_info_service"
+  "PALLET_SERVICE=$BASE_DIR/pallet_service"
+  # "MANUFACTURING_SERVICE=$BASE_DIR/manufacturing_service"
+  "LABEL_SERVICE=$BASE_DIR/label_service"
+  "FILE_INTERFACE_SERVICE=$BASE_DIR/file_interface_service"
+  # "DATA_PROCESSING_SERVICE=$BASE_DIR/data_processing_and_analysis_service"
 )
 
 # ───── Commands ─────
-FASTAPI_VENV="source ../.venv/bin/activate"
-GIT_DEV="git checkout dev; git status"
-GIT_MAIN="git checkout main && git status"
+GIT_STATUS="git pull; git status"
+FASTAPI_VENV="sh update.sh"
 
 # ───── Create Session ─────
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     tmux new-session -d -s "$SESSION" -n "$MAIN"
 
     # ───── Main Window Panes ─────
-    # Split horizontally
     tmux split-window -h -t "$SESSION:$MAIN"
 
-        # ───── LEFT PANE (API's) ─────
         tmux select-pane -t "$SESSION:$MAIN.1"
-        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/apis/pallet_api\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.1" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.1" "docker container stop pallet_api; docker container rm pallet_api; docker compose up --build --detach; docker network connect application_network pallet_api; docker logs -f pallet_api" C-m
-        tmux split-window -v -t "$SESSION:$MAIN.1"
-        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/apis/label_api\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.2" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.2" "docker container stop label_api; docker container rm label_api; docker compose up --build --detach; docker network connect application_network label_api; docker logs -f label_api" C-m
-        tmux split-window -v -t "$SESSION:$MAIN.2"
-        tmux send-keys -t "$SESSION:$MAIN.3" "cd \"$BASE_DIR/apis/nutritionals_api\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.3" "docker container stop nutritionals_api; docker container rm nutritionals_api; docker compose up --build --detach; docker network connect application_network nutritionals_api; docker logs -f nutritionals_api" C-m
-
-        # ───── RIGHT PANE (Frontend) ─────
-        tmux select-pane -t "$SESSION:$MAIN.4"
-        tmux send-keys -t "$SESSION:$MAIN.4" "cd \"$BASE_DIR/frontend\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.4" "$GIT_DEV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.4" "docker container stop pallet_app; docker container rm pallet_app; docker compose up --build --detach; docker network connect _application_network pallet_app; docker logs -f pallet_app" C-m
-        tmux split-window -v -t "$SESSION:$MAIN.4"
-        tmux send-keys -t "$SESSION:$MAIN.5" "cd \"$BASE_DIR/appnutritionals\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.5" "docker container stop nutritionals_app; docker container rm nutritionals_app; docker compose up --build --detach; docker network connect _application_network nutritionals_app; docker logs -f nutritionals_app" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/data_processing_and_analysis_service\"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "$FASTAPI_VENV" C-m
+        tmux send-keys -t "$SESSION:$MAIN.1" "docker attach analysis" C-m
+        tmux select-pane -t "$SESSION:$MAIN.2"
+        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/manufacturing_service \"" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "$FASTAPI_VENV" C-m
+        tmux send-keys -t "$SESSION:$MAIN.2" "docker attach manufacturing" C-m
 
     # ───── API Windows ─────
-    for entry in "${API_ENTRIES[@]}"; do
+    for entry in "${SERVICES[@]}"; do
         IFS='=' read -r API APP_PATH <<< "$entry"
         tmux new-window -t "$SESSION" -n "$API"
-        tmux send-keys -t "$SESSION:$API" "cd \"$APP_PATH/app\"" C-m
+        tmux send-keys -t "$SESSION:$API" "cd \"$APP_PATH\"" C-m
+        tmux send-keys -t "$SESSION:$API" "$GIT_STATUS" C-m
         tmux send-keys -t "$SESSION:$API" "$FASTAPI_VENV" C-m
-        tmux send-keys -t "$SESSION:$API" "$GIT_DEV" C-m
-    done
-
-    # ───── Frontend Windows ─────
-    for entry in "${FRONT_ENTRIES[@]}"; do
-        IFS='=' read -r FRONT FRONT_PATH <<< "$entry"
-        tmux new-window -t "$SESSION" -n "$FRONT"
-        tmux send-keys -t "$SESSION:$FRONT" "cd \"$FRONT_PATH/src\"" C-m
-        tmux send-keys -t "$SESSION:$FRONT" "$GIT_DEV" C-m
     done
 
     tmux select-window -t "$SESSION:$MAIN"
