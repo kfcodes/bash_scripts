@@ -1,40 +1,54 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-echo "[docker-prune] Starting FULL Docker cleanup at $(date)"
+# -----------------------------
+# What this script does:
+# 1) (Optionally) loads shared config from ~/.config/docker-scripts/config.sh (XDG compliant).
+#    - The destroy script doesn't require config, but sourcing keeps your scripts consistent/portable.
+# 2) Stops ALL running containers.
+# 3) Removes ALL containers.
+# 4) Prunes: unused images (ALL), networks, volumes, and build cache.
+#
+# WARNING: This is destructive. It will kill workloads and delete containers.
+# -----------------------------
+
+# Must run as root (recommended for consistent permissions)
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "[docker-destroy] Please run as root (sudo)" >&2
+  exit 1
+fi
+
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/docker-scripts/config.sh"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+  echo "[docker-destroy] Loaded config: $CONFIG_FILE"
+else
+  echo "[docker-destroy] No config found at $CONFIG_FILE (continuing without it)"
+fi
+
+echo "[docker-destroy] Plan: stop+remove ALL containers, then prune images/networks/volumes/build-cache"
+echo "[docker-destroy] Starting FULL Docker cleanup at $(date)"
 
 # Stop all running containers (if any)
-RUNNING_CONTAINERS=$(docker ps -q)
-
-if [ -n "$RUNNING_CONTAINERS" ]; then
-  echo "[docker-prune] Stopping running containers..."
-  docker stop $RUNNING_CONTAINERS
-else
-  echo "[docker-prune] No running containers to stop."
-fi
+echo "[docker-destroy] Stopping running containers (if any)..."
+docker ps -q | xargs -r docker stop
 
 # Remove all containers (stopped + previously running)
-ALL_CONTAINERS=$(docker ps -aq)
-
-if [ -n "$ALL_CONTAINERS" ]; then
-  echo "[docker-prune] Removing all containers..."
-  docker rm $ALL_CONTAINERS
-else
-  echo "[docker-prune] No containers to remove."
-fi
+echo "[docker-destroy] Removing all containers (if any)..."
+docker ps -aq | xargs -r docker rm
 
 # Remove everything else
-echo "[docker-prune] Pruning images..."
+echo "[docker-destroy] Pruning images (ALL unused)..."
 docker image prune -a -f
 
-echo "[docker-prune] Pruning networks..."
+echo "[docker-destroy] Pruning networks..."
 docker network prune -f
 
-echo "[docker-prune] Pruning volumes..."
+echo "[docker-destroy] Pruning volumes..."
 docker volume prune -f
 
-echo "[docker-prune] Pruning build cache..."
+echo "[docker-destroy] Pruning build cache..."
 docker builder prune -f
 
-echo "[docker-prune] Cleanup finished at $(date)"
-
+echo "[docker-destroy] Cleanup finished at $(date)"

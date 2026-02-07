@@ -1,13 +1,42 @@
 #!/usr/bin/env bash
 set -e
 
-# ---- Must run as root ----
+# -----------------------------
+# What this script does:
+# 1) Ensures it is running as root (required for systemctl + docker).
+# 2) Stops/disables/masks host MariaDB service to prevent port 3306 conflicts.
+# 3) Loads shared config from ~/.config/docker-scripts/config.sh (XDG compliant).
+# 4) Ensures required Docker networks + volume exist.
+# 5) (Re)creates the MariaDB container and attaches it to both networks.
+# -----------------------------
+
+# Must run as root
 if [ "$EUID" -ne 0 ]; then
   echo "[mariadb] Please run as root (sudo)"
   exit 1
 fi
 
-# ---- Disable host MariaDB completely ----
+# Load shared config (Option A)
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/docker-scripts/config.sh"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+else
+  echo "[mariadb] Missing config file: $CONFIG_FILE" >&2
+  echo "[mariadb] Create it at: ~/.config/docker-scripts/config.sh" >&2
+  exit 1
+fi
+
+echo "[mariadb] Plan:"
+echo "  - Stop/disable/mask host mariadb.service (if present)"
+echo "  - Ensure networks: DB_NETWORK=$DB_NETWORK, APP_NETWORK=$APP_NETWORK"
+echo "  - Ensure volume:   MARIADB_VOLUME_NAME=$MARIADB_VOLUME_NAME"
+echo "  - Start container: MARIADB_CONTAINER_NAME=$MARIADB_CONTAINER_NAME"
+echo "  - Image:           MARIADB_IMAGE=$MARIADB_IMAGE"
+echo "  - Publish:         3306:3306"
+echo
+
+# Disable host MariaDB completely (avoid port conflicts)
 if systemctl list-unit-files | grep -q '^mariadb\.service'; then
   echo "[mariadb] Stopping host MariaDB service"
   systemctl stop mariadb || true
@@ -21,73 +50,65 @@ else
   echo "[mariadb] Host MariaDB service not found"
 fi
 
-# ---- Configuration ----
-DB_NETWORK="db_net"
-APP_NETWORK="application_network"
-
-CONTAINER_NAME="mariadb"
-VOLUME_NAME="mariadb_data"
-IMAGE="mariadb:11"
-
-MYSQL_ROOT_PASSWORD="rootpassword"
-MYSQL_DATABASE="appdb"
-MYSQL_USER="appuser"
-MYSQL_PASSWORD="apppassword"
-# -----------------------
-
 echo "[mariadb] Starting MariaDB container setup at $(date)"
 
 # Create DB network
 if ! docker network inspect "$DB_NETWORK" >/dev/null 2>&1; then
   echo "[mariadb] Creating network: $DB_NETWORK"
   docker network create "$DB_NETWORK"
+else
+  echo "[mariadb] Network exists: $DB_NETWORK"
 fi
 
 # Create application network
 if ! docker network inspect "$APP_NETWORK" >/dev/null 2>&1; then
   echo "[mariadb] Creating network: $APP_NETWORK"
   docker network create "$APP_NETWORK"
+else
+  echo "[mariadb] Network exists: $APP_NETWORK"
 fi
 
 # Create volume
-if ! docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
-  echo "[mariadb] Creating volume: $VOLUME_NAME"
-  docker volume create "$VOLUME_NAME"
+if ! docker volume inspect "$MARIADB_VOLUME_NAME" >/dev/null 2>&1; then
+  echo "[mariadb] Creating volume: $MARIADB_VOLUME_NAME"
+  docker volume create "$MARIADB_VOLUME_NAME"
+else
+  echo "[mariadb] Volume exists: $MARIADB_VOLUME_NAME"
 fi
 
 # Remove existing container if present
-if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
-  echo "[mariadb] Removing existing container"
-  docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker rm "$CONTAINER_NAME"
+if docker ps -a --format '{{.Names}}' | grep -qx "$MARIADB_CONTAINER_NAME"; then
+  echo "[mariadb] Removing existing container: $MARIADB_CONTAINER_NAME"
+  docker stop "$MARIADB_CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker rm "$MARIADB_CONTAINER_NAME"
 fi
 
 # Pull image if missing
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  echo "[mariadb] Pulling image: $IMAGE"
-  docker pull "$IMAGE"
+if ! docker image inspect "$MARIADB_IMAGE" >/dev/null 2>&1; then
+  echo "[mariadb] Pulling image: $MARIADB_IMAGE"
+  docker pull "$MARIADB_IMAGE"
+else
+  echo "[mariadb] Image exists locally: $MARIADB_IMAGE"
 fi
 
 # Start container on DB network
-echo "[mariadb] Starting MariaDB container"
+echo "[mariadb] Starting container on network: $DB_NETWORK"
 
 docker run -d \
-  --name "$CONTAINER_NAME" \
+  --name "$MARIADB_CONTAINER_NAME" \
   --network "$DB_NETWORK" \
   -p 3306:3306 \
-  -v "$VOLUME_NAME:/var/lib/mysql" \
+  -v "$MARIADB_VOLUME_NAME:/var/lib/mysql" \
   -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
   -e MYSQL_DATABASE="$MYSQL_DATABASE" \
   -e MYSQL_USER="$MYSQL_USER" \
   -e MYSQL_PASSWORD="$MYSQL_PASSWORD" \
   --restart unless-stopped \
-  "$IMAGE"
+  "$MARIADB_IMAGE"
 
 # Attach to application network
-echo "[mariadb] Connecting container to $APP_NETWORK"
-docker network connect "$APP_NETWORK" "$CONTAINER_NAME"
+echo "[mariadb] Connecting container to network: $APP_NETWORK"
+docker network connect "$APP_NETWORK" "$MARIADB_CONTAINER_NAME"
 
-echo "[mariadb] MariaDB networks:"
-docker inspect -f '{{range .NetworkSettings.Networks}}{{println .NetworkID}}{{end}}' "$CONTAINER_NAME"
-
-echo "[mariadb] Done."
+echo "[mariadb] Done. Container networks:"
+docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$MARIADB_CONTAINER_NAME"
