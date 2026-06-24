@@ -1,56 +1,152 @@
 #!/bin/bash
 set -euo pipefail
 
-# ───── Paths ─────
 BASE_DIR="$HOME/production_apps"
-
-# ───── Session & Windows ─────
 SESSION="dev_env"
 
-# Window Names
-MAIN="WIP"
+TMUX_SOCK="$HOME/.tmux/dev_env.sock"
+mkdir -p "$(dirname "$TMUX_SOCK")"
+TMUX_CMD=(tmux -S "$TMUX_SOCK")
 
-# ───── API Windows & Paths ─────
-SERVICES=(
-  "FRONTEND_SERVICE=$BASE_DIR/frontend_service"
-  "PRODUCT_INFO_SERVICE=$BASE_DIR/product_info_service"
-  "PALLET_SERVICE=$BASE_DIR/pallet_service"
-  # "MANUFACTURING_SERVICE=$BASE_DIR/manufacturing_service"
-  "LABEL_SERVICE=$BASE_DIR/label_service"
-  "FILE_INTERFACE_SERVICE=$BASE_DIR/file_interface_service"
-  # "DATA_PROCESSING_SERVICE=$BASE_DIR/data_processing_and_analysis_service"
+# ---------- Precursor: stop host mariadb, start docker mariadb ----------
+preflight_mariadb() {
+  echo "[preflight] Stopping host mariadb service..."
+  if ! sudo systemctl stop mariadb; then
+    echo "[preflight] ERROR: failed to stop host mariadb (sudo/systemctl error). Aborting." >&2
+    exit 1
+  fi
+
+  echo "[preflight] Starting docker container 'mariadb'..."
+  if docker ps --format '{{.Names}}' | grep -qx 'mariadb'; then
+    echo "[preflight] docker mariadb already running."
+    return 0
+  fi
+
+  if docker ps -a --format '{{.Names}}' | grep -qx 'mariadb'; then
+    if ! docker start mariadb >/dev/null; then
+      echo "[preflight] ERROR: failed to start docker container 'mariadb'. Aborting." >&2
+      exit 1
+    fi
+  else
+    echo "[preflight] ERROR: docker container 'mariadb' not found. Aborting." >&2
+    exit 1
+  fi
+
+  echo "[preflight] Waiting briefly for docker mariadb to come up..."
+  sleep 2
+  if ! docker ps --format '{{.Names}}' | grep -qx 'mariadb'; then
+    echo "[preflight] ERROR: docker mariadb did not end up running. Aborting." >&2
+    exit 1
+  fi
+
+  echo "[preflight] OK."
+}
+
+preflight_mariadb
+
+declare -A APP_PATH=(
+  [frontend]="$BASE_DIR/frontend_service"
+  [labels]="$BASE_DIR/label_service"
+  [products]="$BASE_DIR/product_info_service"
+  [pallets]="$BASE_DIR/pallet_service"
+  [manufacturing]="$BASE_DIR/manufacturing_service"
+  [files]="$BASE_DIR/file_interface_service"
+  [analysis]="$BASE_DIR/data_processing_and_analysis_service"
 )
 
-# ───── Commands ─────
-GIT_STATUS="git pull; git status"
-FASTAPI_VENV="sh update.sh"
+WIP_SERVICES=(frontend labels)
+BACKGROUND_SERVICES=(frontend products pallets manufacturing labels files analysis)
 
-# ───── Create Session ─────
-if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-    tmux new-session -d -s "$SESSION" -n "$MAIN"
+send() {
+  local pane="$1"
+  local line="$2"
+  "${TMUX_CMD[@]}" send-keys -t "$pane" -l "$line"
+  "${TMUX_CMD[@]}" send-keys -t "$pane" C-m
+}
 
-    # ───── Main Window Panes ─────
-    tmux split-window -h -t "$SESSION:$MAIN"
+cd_and_run() {
+  local pane="$1"
+  local dir="$2"
+  local cmd="$3"
+  send "$pane" "cd \"$dir\""
+  send "$pane" "$cmd"
+}
 
-        tmux select-pane -t "$SESSION:$MAIN.1"
-        tmux send-keys -t "$SESSION:$MAIN.1" "cd \"$BASE_DIR/data_processing_and_analysis_service\"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.1" "$FASTAPI_VENV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.1" "docker attach analysis" C-m
-        tmux select-pane -t "$SESSION:$MAIN.2"
-        tmux send-keys -t "$SESSION:$MAIN.2" "cd \"$BASE_DIR/manufacturing_service \"" C-m
-        tmux send-keys -t "$SESSION:$MAIN.2" "$FASTAPI_VENV" C-m
-        tmux send-keys -t "$SESSION:$MAIN.2" "docker attach manufacturing" C-m
+ensure_window() {
+  local win="$1"
+  if ! "${TMUX_CMD[@]}" list-windows -t "$SESSION" -F "#{window_name}" 2>/dev/null | grep -qx "$win"; then
+    "${TMUX_CMD[@]}" new-window -t "$SESSION" -n "$win" >/dev/null
+  fi
+}
 
-    # ───── API Windows ─────
-    for entry in "${SERVICES[@]}"; do
-        IFS='=' read -r API APP_PATH <<< "$entry"
-        tmux new-window -t "$SESSION" -n "$API"
-        tmux send-keys -t "$SESSION:$API" "cd \"$APP_PATH\"" C-m
-        tmux send-keys -t "$SESSION:$API" "$GIT_STATUS" C-m
-        tmux send-keys -t "$SESSION:$API" "$FASTAPI_VENV" C-m
-    done
+best_fit_layout() {
+  local win="$1"
+  "${TMUX_CMD[@]}" select-layout -t "$SESSION:$win" tiled >/dev/null 2>&1 || true
+  "${TMUX_CMD[@]}" select-layout -t "$SESSION:$win" -E    >/dev/null 2>&1 || true
+}
 
-    tmux select-window -t "$SESSION:$MAIN"
+create_window_with_panes() {
+  local win="$1"; shift
+  local -a services=( "$@" )
+
+  ensure_window "$win"
+  "${TMUX_CMD[@]}" select-window -t "$SESSION:$win" >/dev/null
+
+  local root_pane
+  root_pane="$("${TMUX_CMD[@]}" list-panes -t "$SESSION:$win" -F "#{pane_id}" | head -n1)"
+  [[ -n "${root_pane:-}" ]]
+
+  local last_pane="$root_pane"
+  local first=true
+  local idx=0
+
+  for svc in "${services[@]}"; do
+    local pane
+
+    if [[ "$first" == true ]]; then
+      pane="$root_pane"
+      first=false
+    else
+      if (( idx % 2 == 0 )); then
+        pane="$("${TMUX_CMD[@]}" split-window -h -P -F "#{pane_id}" -t "$last_pane")"
+      else
+        pane="$("${TMUX_CMD[@]}" split-window -v -P -F "#{pane_id}" -t "$last_pane")"
+      fi
+      last_pane="$pane"
+    fi
+
+    "${TMUX_CMD[@]}" select-pane -t "$pane" -T "$svc"
+
+    local app_path="${APP_PATH[$svc]:-}"
+    if [[ -z "$app_path" ]]; then
+      send "$pane" "echo 'Unknown service: $svc'"
+      idx=$((idx + 1))
+      continue
+    fi
+
+    cd_and_run "$pane" "$app_path" 'git pull --ff-only || true; git status'
+
+    if [[ "$win" != "wip" ]]; then
+      cd_and_run "$pane" "$app_path" 'sh update.sh'
+      send "$pane" "$(printf 'docker attach "%s" || docker start -ai "%s"' "$svc" "$svc")"
+    fi
+
+    idx=$((idx + 1))
+  done
+
+  best_fit_layout "$win"
+}
+
+if ! "${TMUX_CMD[@]}" has-session -t "$SESSION" 2>/dev/null; then
+  "${TMUX_CMD[@]}" new-session -d -s "$SESSION" -n "background" >/dev/null
+  create_window_with_panes "background" "${BACKGROUND_SERVICES[@]}"
+  create_window_with_panes "wip" "${WIP_SERVICES[@]}"
+  "${TMUX_CMD[@]}" select-window -t "$SESSION:wip" >/dev/null
 fi
 
-tmux attach -t "$SESSION"
+# Attach/switch using the pinned socket
+if [[ -n "${TMUX:-}" ]]; then
+  "${TMUX_CMD[@]}" switch-client -t "$SESSION"
+else
+  "${TMUX_CMD[@]}" attach -t "$SESSION"
+fi

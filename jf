@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+
+BASE_DIR="$HOME/production_apps"
+SESSION="dev_env"
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $(basename "$0") <service/container>"
+  exit 1
+fi
+
+CONTAINER="$1"
+
+# Must be run from within tmux (same server)
+if [[ -z "${TMUX:-}" ]]; then
+  echo "This script must be run from inside tmux."
+  exit 1
+fi
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "tmux session '$SESSION' not found."
+  exit 1
+fi
+
+declare -A APP_PATH=(
+  [frontend]="$BASE_DIR/frontend_service"
+  [labels]="$BASE_DIR/label_service"
+  [products]="$BASE_DIR/product_info_service"
+  [pallets]="$BASE_DIR/pallet_service"
+  [manufacturing]="$BASE_DIR/manufacturing_service"
+  [files]="$BASE_DIR/file_interface_service"
+  [analysis]="$BASE_DIR/data_processing_and_analysis_service"
+)
+
+APP_DIR="${APP_PATH[$CONTAINER]:-}"
+if [[ -z "$APP_DIR" ]]; then
+  echo "Unknown service/container '$CONTAINER' (no APP_PATH mapping)."
+  exit 1
+fi
+
+# Use '|' as a safe delimiter (tmux does NOT expand \t into a real tab)
+mapfile -t LINES < <(
+  tmux list-panes -t "$SESSION" -a -F "#{pane_id}|#{window_name}|#{pane_title}"
+)
+
+TARGET_PANE=""
+
+# 1) Prefer exact title match in background window
+for line in "${LINES[@]}"; do
+  IFS='|' read -r pane_id win title <<< "$line"
+  if [[ "$win" == "background" && "$title" == "$CONTAINER" ]]; then
+    TARGET_PANE="$pane_id"
+    break
+  fi
+done
+
+# 2) Fallback: exact title match anywhere
+if [[ -z "$TARGET_PANE" ]]; then
+  for line in "${LINES[@]}"; do
+    IFS='|' read -r pane_id win title <<< "$line"
+    if [[ "$title" == "$CONTAINER" ]]; then
+      TARGET_PANE="$pane_id"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$TARGET_PANE" ]]; then
+  echo "No pane found with title '$CONTAINER' in session '$SESSION'."
+  echo
+  echo "Panes I can see:"
+  tmux list-panes -t "$SESSION" -a -F "#{pane_id}  #{window_name}  title='#{pane_title}'  path='#{pane_current_path}'"
+  exit 1
+fi
+
+# Save current pane so your view doesn't change
+ORIG_PANE="$(tmux display-message -p "#{pane_id}")"
+
+# Ensure Ctrl-C hits the right pane
+tmux select-pane -t "$TARGET_PANE"
+tmux send-keys -t "$TARGET_PANE" C-c
+
+tmux send-keys -t "$TARGET_PANE" "docker stop \"$CONTAINER\" 2>/dev/null || true" C-m
+tmux send-keys -t "$TARGET_PANE" "cd \"$APP_DIR\" && sh update.sh" C-m
+tmux send-keys -t "$TARGET_PANE" "docker attach \"$CONTAINER\" || docker start -ai \"$CONTAINER\"" C-m
+
+# Restore your original pane
+tmux select-pane -t "$ORIG_PANE" 2>/dev/null || true

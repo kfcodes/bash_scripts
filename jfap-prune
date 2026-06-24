@@ -1,0 +1,151 @@
+#!/bin/bash
+set -euo pipefail
+
+BASE_DIR="$HOME/production_apps"
+SESSION="dev_env"
+TARGET_WINDOW="remaining"
+
+MANAGED_CONTAINERS=(
+  products pallets labels files frontend analysis manufacturing
+)
+
+declare -A APP_PATH=(
+  [frontend]="$BASE_DIR/frontend_service"
+  [labels]="$BASE_DIR/label_service"
+  [products]="$BASE_DIR/product_info_service"
+  [pallets]="$BASE_DIR/pallet_service"
+  [manufacturing]="$BASE_DIR/manufacturing_service"
+  [files]="$BASE_DIR/file_interface_service"
+  [analysis]="$BASE_DIR/data_processing_and_analysis_service"
+)
+
+is_managed() {
+  local t="$1"
+  for c in "${MANAGED_CONTAINERS[@]}"; do
+    [[ "$t" == "$c" ]] && return 0
+  done
+  return 1
+}
+
+send() {
+  local pane="$1"
+  local line="$2"
+  tmux send-keys -t "$pane" -l "$line"
+  tmux send-keys -t "$pane" C-m
+}
+
+git_is_repo() { git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1; }
+git_dirty()   { [[ -n "$(git -C "$1" status --porcelain 2>/dev/null)" ]]; }
+
+# Keep ONLY if there are uncommitted changes
+should_keep() {
+  local path="$1"
+  git_is_repo "$path" || return 1
+  git_dirty "$path"
+}
+
+post_move_status_in_pane() {
+  local pane="$1"
+  local path="$2"
+  send "$pane" "cd \"$path\" && git status -sb"
+}
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "tmux session '$SESSION' not found."
+  exit 1
+fi
+
+ORIG_PANE=""
+if [[ -n "${TMUX:-}" ]]; then
+  ORIG_PANE="$(tmux display-message -p "#{pane_id}")"
+fi
+
+# IMPORTANT: tmux does NOT expand \t; use a real delimiter.
+mapfile -t PANES < <(
+  tmux list-panes -t "$SESSION" -a -F "#{pane_id}|#{window_name}|#{pane_title}"
+)
+
+declare -A SEEN_PANE=()
+REMAINING_PANES=()
+declare -A PATH_BY_PANE=()
+
+for line in "${PANES[@]}"; do
+  IFS='|' read -r PANE_ID WIN PANE_TITLE <<< "$line"
+
+  [[ -n "${PANE_TITLE:-}" ]] || continue
+  is_managed "$PANE_TITLE" || continue
+
+  CONTAINER="$PANE_TITLE"
+
+  # Deduplicate: if multiple panes with same container title, kill extras
+  if [[ -n "${SEEN_PANE[$CONTAINER]:-}" ]]; then
+    tmux send-keys -t "$PANE_ID" C-c
+    send "$PANE_ID" "docker stop \"$CONTAINER\" 2>/dev/null || true"
+    tmux kill-pane -t "$PANE_ID"
+    continue
+  fi
+  SEEN_PANE[$CONTAINER]="$PANE_ID"
+
+  # Stop any running attach and stop container (you asked to stop ALL containers)
+  tmux send-keys -t "$PANE_ID" C-c
+  send "$PANE_ID" "docker stop \"$CONTAINER\" 2>/dev/null || true"
+
+  # Repo path from mapping
+  REPO_PATH="${APP_PATH[$CONTAINER]:-}"
+  if [[ -z "$REPO_PATH" ]]; then
+    tmux kill-pane -t "$PANE_ID"
+    unset "SEEN_PANE[$CONTAINER]"
+    continue
+  fi
+
+  if should_keep "$REPO_PATH"; then
+    REMAINING_PANES+=("$PANE_ID")
+    PATH_BY_PANE["$PANE_ID"]="$REPO_PATH"
+  else
+    tmux kill-pane -t "$PANE_ID"
+    unset "SEEN_PANE[$CONTAINER]"
+  fi
+done
+
+# Ensure target window exists
+if ! tmux list-windows -t "$SESSION" -F "#{window_name}" | grep -qx "$TARGET_WINDOW"; then
+  tmux new-window -t "$SESSION" -n "$TARGET_WINDOW"
+fi
+
+# Move kept panes into target window
+for pane in "${REMAINING_PANES[@]}"; do
+  tmux display-message -p -t "$pane" "#{pane_id}" >/dev/null 2>&1 || continue
+  cur_win="$(tmux display-message -p -t "$pane" "#{window_name}")"
+  if [[ "$cur_win" != "$TARGET_WINDOW" ]]; then
+    tmux join-pane -s "$pane" -t "$SESSION:$TARGET_WINDOW"
+  fi
+done
+
+tmux select-layout -t "$SESSION:$TARGET_WINDOW" tiled
+
+# Kill all other windows
+while IFS= read -r w; do
+  [[ "$w" == "$TARGET_WINDOW" ]] && continue
+  tmux kill-window -t "$SESSION:$w" 2>/dev/null || true
+done < <(tmux list-windows -t "$SESSION" -F "#{window_name}")
+
+# Show git status in the kept panes
+for pane in "${REMAINING_PANES[@]}"; do
+  tmux display-message -p -t "$pane" "#{pane_id}" >/dev/null 2>&1 || continue
+  path="${PATH_BY_PANE[$pane]:-}"
+  [[ -n "$path" ]] || continue
+  post_move_status_in_pane "$pane" "$path"
+done
+
+# Optional: close the pane you ran this from if it's not one of the kept panes
+if [[ -n "$ORIG_PANE" ]]; then
+  if tmux display-message -p -t "$ORIG_PANE" "#{pane_id}" >/dev/null 2>&1; then
+    keep=false
+    for p in "${REMAINING_PANES[@]}"; do
+      [[ "$p" == "$ORIG_PANE" ]] && keep=true && break
+    done
+    if [[ "$keep" == "false" ]]; then
+      tmux kill-pane -t "$ORIG_PANE" 2>/dev/null || true
+    fi
+  fi
+fi
